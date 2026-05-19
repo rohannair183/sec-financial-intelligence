@@ -1,0 +1,13 @@
+sec_financial_intelligence:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: sec-edgar-intelligence
+      dataset: sec_intelligence
+      keyfile: "{{ env_var('DBT_KEYFILE') }}"
+      threads: 4
+      timeout_seconds: 300
+      location: US
+      priority: interactive

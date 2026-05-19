@@ -1,0 +1,65 @@
+endpoints:
+  - name: company_tickers
+    description: "All SEC-registered company tickers and CIKs"
+    url: "https://www.sec.gov/files/company_tickers.json"
+    method: GET
+    path_params: []
+    checkpoint_subdir: "company_tickers"
+    bigquery_table: "raw_company_tickers"
+    write_disposition: WRITE_TRUNCATE
+    # Response is {index: {cik_str, ticker, title}} — extract values as row list
+    row_transform: dict_values
+
+  - name: company_submissions
+    description: "Filing submissions and metadata for a company"
+    url: "${edgar.base_url}/submissions/CIK{cik}.json"
+    method: GET
+    path_params:
+      - name: cik
+        description: "10-digit zero-padded CIK (e.g. 0000320193)"
+    checkpoint_subdir: "company_submissions"
+    bigquery_table: "raw_company_submissions"
+    write_disposition: WRITE_TRUNCATE
+
+  - name: company_facts
+    description: "All XBRL financial facts reported by a company"
+    url: "${edgar.base_url}/api/xbrl/companyfacts/CIK{cik}.json"
+    method: GET
+    path_params:
+      - name: cik
+        description: "10-digit zero-padded CIK"
+    checkpoint_subdir: "company_facts"
+    bigquery_table: "raw_company_facts"
+    write_disposition: WRITE_TRUNCATE
+
+  - name: company_concept
+    description: "XBRL data for one financial concept for a company"
+    url: "${edgar.base_url}/api/xbrl/companyconcept/CIK{cik}/{taxonomy}/{concept}.json"
+    method: GET
+    path_params:
+      - name: cik
+        description: "10-digit zero-padded CIK"
+      - name: taxonomy
+        description: "XBRL taxonomy: us-gaap | ifrs-full | dei"
+      - name: concept
+        description: "Concept name e.g. Assets, Revenues, NetIncomeLoss"
+    checkpoint_subdir: "company_concept"
+    bigquery_table: "raw_company_concept"
+    write_disposition: WRITE_APPEND
+
+  - name: xbrl_frames
+    description: "Cross-company XBRL values for one concept in one period"
+    url: "${edgar.base_url}/api/xbrl/frames/{taxonomy}/{concept}/{unit}/{period}.json"
+    method: GET
+    path_params:
+      - name: taxonomy
+        description: "XBRL taxonomy: us-gaap"
+      - name: concept
+        description: "Concept name e.g. Assets"
+      - name: unit
+        description: "Unit e.g. USD, shares, USD-per-shares"
+      - name: period
+        description: "Period e.g. CY2023, CY2023Q1I (instant), CY2023Q1 (duration)"
+    checkpoint_subdir: "xbrl_frames"
+    bigquery_table: "raw_xbrl_frames"
+    write_disposition: WRITE_APPEND

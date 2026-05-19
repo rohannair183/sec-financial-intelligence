@@ -1,0 +1,3 @@
+checkpoints:
+  base_dir: "checkpoints"
+  delete_on_success: true

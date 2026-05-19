@@ -1,0 +1,8 @@
+edgar:
+  base_url: "https://data.sec.gov"
+  secondary_base_url: "https://www.sec.gov"
+  headers:
+    User-Agent: "${EDGAR_USER_AGENT}"
+    Accept-Encoding: "gzip, deflate"
+  rate_limit:
+    requests_per_second: 10

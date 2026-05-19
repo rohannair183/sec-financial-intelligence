@@ -1,0 +1,5 @@
+bigquery:
+  project: "${GCP_PROJECT}"
+  dataset: "${BQ_DATASET}"
+  location: "${BQ_LOCATION}"
+  credentials_file: "${DBT_KEYFILE}"
