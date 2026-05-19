@@ -1,0 +1,83 @@
+name: SEC EDGAR Ingestion
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: "Endpoint name (see config/ingestion/endpoints.yaml)"
+        required: true
+        default: company_tickers
+        type: choice
+        options:
+          - company_tickers
+          - company_submissions
+          - company_facts
+          - company_concept
+          - xbrl_frames
+      cik:
+        description: "10-digit zero-padded CIK (required for company_* endpoints)"
+        required: false
+        type: string
+      taxonomy:
+        description: "XBRL taxonomy, e.g. us-gaap (required for company_concept, xbrl_frames)"
+        required: false
+        type: string
+      concept:
+        description: "XBRL concept, e.g. Assets (required for company_concept, xbrl_frames)"
+        required: false
+        type: string
+      unit:
+        description: "Unit, e.g. USD (required for xbrl_frames)"
+        required: false
+        type: string
+      period:
+        description: "Period, e.g. CY2023 (required for xbrl_frames)"
+        required: false
+        type: string
+
+  schedule:
+    # Refresh all company tickers daily at 06:00 UTC (after SEC nightly update)
+    - cron: "0 6 * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    env:
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      BQ_DATASET: ${{ secrets.BQ_DATASET }}
+      BQ_LOCATION: ${{ secrets.BQ_LOCATION }}
+      EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+      # Points to the temp file written in the "Write SA key" step below
+      DBT_KEYFILE: /tmp/sa_key.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # GCP_SA_KEY holds the full JSON content of the service account key.
+      # There is no persistent filesystem in CI, so we write it to a temp file
+      # and point DBT_KEYFILE there. The file is never uploaded as an artifact.
+      - name: Write GCP service account key
+        run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/sa_key.json
+
+      - name: Run ingestion (scheduled — company_tickers)
+        if: github.event_name == 'schedule'
+        run: uv run python -m src.ingestion.ingestor run --endpoint company_tickers
+
+      - name: Run ingestion (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          uv run python -m src.ingestion.ingestor run \
+            --endpoint "${{ inputs.endpoint }}" \
+            ${{ inputs.cik      && format('--cik {0}',      inputs.cik)      || '' }} \
+            ${{ inputs.taxonomy && format('--taxonomy {0}', inputs.taxonomy) || '' }} \
+            ${{ inputs.concept  && format('--concept {0}',  inputs.concept)  || '' }} \
+            ${{ inputs.unit     && format('--unit {0}',     inputs.unit)     || '' }} \
+            ${{ inputs.period   && format('--period {0}',   inputs.period)   || '' }}

@@ -78,3 +78,51 @@ uv sync
 # copy and fill in credentials
 cp .env.example .env   # set DBT_KEYFILE, GCP_PROJECT, BQ_DATASET, EDGAR_USER_AGENT
 ```
+
+---
+
+## GitHub Actions
+
+The workflow at `.github/workflows/ingest.yml` can run any ingestion endpoint from the GitHub UI or on a schedule.
+
+### Triggering a run
+
+Go to **Actions → SEC EDGAR Ingestion → Run workflow**. Pick an endpoint and fill in only the parameters that endpoint requires:
+
+| Endpoint | Required inputs |
+|---|---|
+| `company_tickers` | _(none)_ |
+| `company_submissions` | `cik` |
+| `company_facts` | `cik` |
+| `company_concept` | `cik`, `taxonomy`, `concept` |
+| `xbrl_frames` | `taxonomy`, `concept`, `unit`, `period` |
+
+The workflow also runs on a daily schedule (06:00 UTC) for `company_tickers`.
+
+### Secrets to configure
+
+Add these under **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret name | What to put in it |
+|---|---|
+| `GCP_SA_KEY` | The **full JSON content** of your GCP service account key file |
+| `GCP_PROJECT` | Your GCP project ID (e.g. `sec-edgar-intelligence`) |
+| `BQ_DATASET` | BigQuery dataset (e.g. `raw`) |
+| `BQ_LOCATION` | BigQuery location (e.g. `US`) |
+| `EDGAR_USER_AGENT` | Your SEC user-agent string (e.g. `Your Name your@email.com`) |
+
+### Local vs CI: how secrets differ
+
+> **The key difference is `DBT_KEYFILE` / `GCP_SA_KEY`.**
+
+**Locally**, you have a `.json` service account key file on disk. Your `.env` sets `DBT_KEYFILE` to its path:
+```
+DBT_KEYFILE=/path/to/sec-edgar-intelligence-abc123.json
+```
+
+**In GitHub Actions**, there is no persistent filesystem to store a key file. Instead:
+1. The full JSON content of the key is stored as the `GCP_SA_KEY` repository secret.
+2. The workflow writes it to a temp file at `/tmp/sa_key.json` at runtime.
+3. `DBT_KEYFILE` is set to that temp path in the job's `env` block.
+
+The temp file exists only for the duration of the job and is never uploaded as an artifact. The actual key file (`.json`) should never be committed to git — it is already excluded by `.gitignore`.
