@@ -46,6 +46,20 @@ New EDGAR endpoints can be added by appending a block to `config/ingestion/endpo
 | `company_concept` | XBRL data for one concept for a company | `cik`, `taxonomy`, `concept` |
 | `xbrl_frames` | Cross-company values for one concept in one period | `taxonomy`, `concept`, `unit`, `period` |
 
+### Run presets
+
+Named presets in `config/ingestion/runs.yaml` group an endpoint and its params into a single re-runnable unit. Presets support list params and period intervals — see [config/ingestion/ingestion_config.md](config/ingestion/ingestion_config.md) for the syntax.
+
+| Preset | Endpoint | What it fetches |
+|---|---|---|
+| `daily_tickers` | `company_tickers` | Full ticker → CIK mapping (daily) |
+| `all_company_submissions` | `company_submissions` | Filing metadata for 8 companies (quarterly) |
+| `all_company_facts` | `company_facts` | All XBRL facts for 8 companies (quarterly) |
+| `balance_sheet_snapshots` | `xbrl_frames` | Assets, Liabilities, Equity, Cash — every quarter from 2021Q1 to CURRENT |
+| `income_statement_annual` | `xbrl_frames` | Revenue, Net Income, Gross Profit, Operating Income, R&D — annual 2021–CURRENT |
+| `income_statement_quarterly` | `xbrl_frames` | Revenue, Net Income — quarterly 2022Q1–CURRENT |
+| `cash_flow_annual` | `xbrl_frames` | Operating cash flow — annual 2021–CURRENT |
+
 ### Usage
 
 ```bash
@@ -55,14 +69,13 @@ source .venv/bin/activate
 # list all configured endpoints
 python -m src.ingestion.ingestor list-endpoints
 
-# ingest all company tickers
+# run a named preset (expands lists and period intervals automatically)
+python -m src.ingestion.ingestor run --preset income_statement_quarterly
+
+# run a single endpoint manually
 python -m src.ingestion.ingestor run --endpoint company_tickers
 
-# ingest XBRL facts for Apple
-python -m src.ingestion.ingestor run --endpoint company_facts --cik 0000320193
-
-# ingest a specific concept across all companies for a period
-# balance sheet (instant) concepts use CY2023Q4I; income statement (duration) use CY2023
+# run with explicit params
 python -m src.ingestion.ingestor run \
   --endpoint xbrl_frames \
   --taxonomy us-gaap \
@@ -70,6 +83,29 @@ python -m src.ingestion.ingestor run \
   --unit USD \
   --period CY2023Q4I
 ```
+
+### List and interval params
+
+Any param in a preset can be a list; the ingestor iterates over the cartesian product of all list params. A `period` param can be a `{from, to}` interval instead of an explicit value — `CURRENT` in `to` resolves at runtime to the latest period with data available in EDGAR.
+
+```yaml
+# 4 concepts × every quarterly instant from 2021Q1 to the latest available = many runs
+balance_sheet_snapshots:
+  endpoint: xbrl_frames
+  taxonomy: us-gaap
+  unit: USD
+  concept:
+    - Assets
+    - Liabilities
+  period:
+    from: CY2021Q1I
+    to: CURRENT
+```
+
+`CURRENT` resolution:
+- Annual (`CY{year}`): resolves to `CY{last_year}` — conservative, ensures full-year filings are available
+- Quarterly (`CY{year}Q{n}`): resolves to the last complete quarter minus a 45-day filing lag
+- Instant (`CY{year}Q{n}I`): same as quarterly, with the `I` suffix
 
 ### Setup
 

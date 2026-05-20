@@ -98,18 +98,37 @@ If you encounter a `Too many fields` error from BigQuery, the response is likely
 
 ## `runs.yaml`
 
-Named presets for triggering ingestion from GitHub Actions. Each preset maps a name to a full set of CLI params. The workflow reads this file at runtime — adding a preset here is all you need to do to expose it in CI.
+Named presets for triggering ingestion from GitHub Actions or locally. The workflow reads this file at runtime — adding a preset here is all you need to expose it in CI.
+
+### Param types
+
+| Type | Syntax | Behaviour |
+|---|---|---|
+| Scalar | `cik: "0000320193"` | Passed as-is to the endpoint |
+| List | `cik: ["0000320193", "0000789019"]` | Iterates over each value; multiple list params produce the cartesian product |
+| Period interval | `period: {from: CY2022Q1, to: CURRENT}` | Expands to a list of period strings; `CURRENT` resolves at runtime |
+
+**CURRENT resolution** (based on today's date):
+
+| Format | Resolves to |
+|---|---|
+| `CY{year}` (annual) | `CY{last_year}` — conservative, ensures full-year 10-K filings are available (~April) |
+| `CY{year}Q{n}` (quarterly duration) | Last complete quarter minus a 45-day filing lag |
+| `CY{year}Q{n}I` (quarterly instant) | Same as quarterly, with the `I` suffix |
+
+### Full preset schema
 
 ```yaml
 runs:
   <preset_name>:
-    endpoint: string          # must match a name in endpoints.yaml
-    schedule: true/false      # optional — include in the daily cron run
-    cik: string               # optional path params — include only what the endpoint needs
-    taxonomy: string
-    concept: string
-    unit: string
-    period: string
+    endpoint: string            # must match a name in endpoints.yaml
+    schedule: true              # optional — run in the daily cron (06:00 UTC)
+    schedule: quarterly         # optional — run in the quarterly cron (1st of Jan/Apr/Jul/Oct)
+    cik: string | [string]      # path params — scalar or list
+    taxonomy: string | [string]
+    concept: string | [string]
+    unit: string | [string]
+    period: string | [string] | {from: string, to: string | CURRENT}
 ```
 
 ### Period format for `xbrl_frames`
@@ -121,25 +140,37 @@ The EDGAR API distinguishes between two period types:
 | Instant (balance sheet) | `Assets`, `Liabilities`, `StockholdersEquity` | `CY{year}Q{n}I` | `CY2023Q4I` |
 | Duration (income statement) | `Revenues`, `NetIncomeLoss`, `OperatingExpenses` | `CY{year}` or `CY{year}Q{n}` | `CY2023`, `CY2023Q1` |
 
-Using a duration period for an instant concept (or vice versa) returns a 404.
+Using a duration period for an instant concept (or vice versa) returns a 404. The `from` period in an interval determines the format — `to` must match.
 
 ### Using presets from the GitHub Actions UI
 
-In **Actions → SEC EDGAR Ingestion → Run workflow**, enter the preset name in the `run_name` field. The workflow reads the YAML and builds the CLI args — no manual param entry needed.
+In **Actions → SEC EDGAR Ingestion → Run workflow**, enter the preset name in the `run_name` field. All params (including list and interval expansion) are handled by the ingestor — no manual param entry needed.
 
-### Adding a scheduled preset
-
-Set `schedule: true` on any preset and it will be included in the daily 06:00 UTC cron run automatically. No changes to the workflow file are needed.
+### Scheduling
 
 ```yaml
 runs:
-  daily_assets_q4:
+  daily_tickers:
+    endpoint: company_tickers
+    schedule: true        # runs every day at 06:00 UTC
+
+  all_company_facts:
+    endpoint: company_facts
+    schedule: quarterly   # runs on the 1st of Jan, Apr, Jul, Oct
+    cik:
+      - "0000320193"
+      - "0000789019"
+
+  balance_sheet_snapshots:
     endpoint: xbrl_frames
     taxonomy: us-gaap
-    concept: Assets
     unit: USD
-    period: CY2023Q4I
-    schedule: true
+    concept:
+      - Assets
+      - Liabilities
+    period:
+      from: CY2021Q1I
+      to: CURRENT         # expands to every quarterly instant up to the latest available
 ```
 
 ---

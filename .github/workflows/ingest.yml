@@ -40,8 +40,10 @@ on:
         type: string
 
   schedule:
-    # Run all presets with schedule: true in config/ingestion/runs.yaml (06:00 UTC)
+    # Daily at 06:00 UTC — runs presets with schedule: true
     - cron: "0 6 * * *"
+    # Quarterly on the 1st of Jan, Apr, Jul, Oct — runs presets with schedule: quarterly
+    - cron: "0 6 1 1,4,7,10 *"
 
 jobs:
   ingest:
@@ -70,23 +72,38 @@ jobs:
       - name: Write GCP service account key
         run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/sa_key.json
 
-      # Schedule: run all presets with schedule: true from runs.yaml
-      - name: Run ingestion (scheduled presets)
-        if: github.event_name == 'schedule'
+      # Daily schedule: run all presets with schedule: true
+      - name: Run ingestion (daily scheduled presets)
+        if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * *'
         run: |
           uv run python - <<'EOF'
           import yaml, subprocess, sys
           runs = yaml.safe_load(open("config/ingestion/runs.yaml"))["runs"]
           for name, cfg in runs.items():
-              if not cfg.get("schedule"):
+              if cfg.get("schedule") is not True:
                   continue
-              args = ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run",
-                      "--endpoint", cfg["endpoint"]]
-              for k in ["cik", "taxonomy", "concept", "unit", "period"]:
-                  if k in cfg:
-                      args += [f"--{k}", str(cfg[k])]
               print(f"Running preset: {name}", flush=True)
-              result = subprocess.run(args)
+              result = subprocess.run(
+                  ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run", "--preset", name]
+              )
+              if result.returncode != 0:
+                  sys.exit(result.returncode)
+          EOF
+
+      # Quarterly schedule: run all presets with schedule: quarterly
+      - name: Run ingestion (quarterly scheduled presets)
+        if: github.event_name == 'schedule' && github.event.schedule == '0 6 1 1,4,7,10 *'
+        run: |
+          uv run python - <<'EOF'
+          import yaml, subprocess, sys
+          runs = yaml.safe_load(open("config/ingestion/runs.yaml"))["runs"]
+          for name, cfg in runs.items():
+              if cfg.get("schedule") != "quarterly":
+                  continue
+              print(f"Running preset: {name}", flush=True)
+              result = subprocess.run(
+                  ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run", "--preset", name]
+              )
               if result.returncode != 0:
                   sys.exit(result.returncode)
           EOF
@@ -94,24 +111,8 @@ jobs:
       # Dispatch with a named preset from runs.yaml
       - name: Run ingestion (named preset)
         if: github.event_name == 'workflow_dispatch' && inputs.run_name != ''
-        env:
-          RUN_NAME: ${{ inputs.run_name }}
         run: |
-          uv run python - <<'EOF'
-          import yaml, subprocess, sys, os
-          runs = yaml.safe_load(open("config/ingestion/runs.yaml"))["runs"]
-          name = os.environ["RUN_NAME"]
-          if name not in runs:
-              print(f"Unknown preset '{name}'. Available: {', '.join(runs)}", file=sys.stderr)
-              sys.exit(1)
-          cfg = runs[name]
-          args = ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run",
-                  "--endpoint", cfg["endpoint"]]
-          for k in ["cik", "taxonomy", "concept", "unit", "period"]:
-              if k in cfg:
-                  args += [f"--{k}", str(cfg[k])]
-          sys.exit(subprocess.run(args).returncode)
-          EOF
+          uv run python -m src.ingestion.ingestor run --preset "${{ inputs.run_name }}"
 
       # Dispatch with manual inputs (no run_name)
       - name: Run ingestion (manual inputs)

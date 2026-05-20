@@ -1,32 +1,102 @@
 # Named ingestion presets.
-# Use run_name in the GitHub Actions workflow_dispatch input to pick one,
-# or reference these when running locally with --preset (if added to the CLI).
+# Run locally:   python -m src.ingestion.ingestor run --preset <name>
+# Run in CI:     enter <name> in the run_name field of the workflow_dispatch input
 #
-# schedule: true  → included in the daily cron run
+# schedule: true       → included in the daily cron (06:00 UTC)
+# schedule: quarterly  → included in the quarterly cron (1 Jan, Apr, Jul, Oct)
 #
-# xbrl_frames period formats:
-#   CY2023        duration (full year) — for income statement concepts
-#   CY2023Q4I     instant (point in time) — for balance sheet concepts
+# Param types:
+#   scalar              cik: "0000320193"
+#   list                cik: ["0000320193", "0000789019"]   — cartesian product across all list params
+#   period interval     period: {from: CY2022Q1, to: CURRENT}
+#
+# CURRENT resolves at runtime to the most recent period with data available in EDGAR:
+#   CY{year}    → CY{last_year}  (annual, filed by ~April)
+#   CY{year}Q{n} → CY{year}Q{n} of the last complete quarter minus a 45-day filing lag
+#   CY{year}Q{n}I → same, with the I (instant) suffix
 
 runs:
+
+  # ── Daily ─────────────────────────────────────────────────────────────────
   daily_tickers:
     endpoint: company_tickers
     schedule: true
 
-  apple_facts:
+  # ── Quarterly ─────────────────────────────────────────────────────────────
+  all_company_submissions:
+    endpoint: company_submissions
+    schedule: quarterly
+    cik:
+      - "0000320193"  # Apple
+      - "0000789019"  # Microsoft
+      - "0001652044"  # Alphabet
+      - "0001018724"  # Amazon
+      - "0001326801"  # Meta
+      - "0001318605"  # Tesla
+      - "0001045810"  # NVIDIA
+      - "0000019617"  # JPMorgan Chase
+
+  all_company_facts:
     endpoint: company_facts
-    cik: "0000320193"
+    schedule: quarterly
+    cik:
+      - "0000320193"  # Apple
+      - "0000789019"  # Microsoft
+      - "0001652044"  # Alphabet
+      - "0001018724"  # Amazon
+      - "0001326801"  # Meta
+      - "0001318605"  # Tesla
+      - "0001045810"  # NVIDIA
+      - "0000019617"  # JPMorgan Chase
 
-  apple_assets_q4_2023:
+  # ── XBRL frames — balance sheet (quarterly instants) ──────────────────────
+  balance_sheet_snapshots:
     endpoint: xbrl_frames
     taxonomy: us-gaap
-    concept: Assets
     unit: USD
-    period: CY2023Q4I        # instant — balance sheet
+    concept:
+      - Assets
+      - Liabilities
+      - StockholdersEquity
+      - CashAndCashEquivalentsAtCarryingValue
+    period:
+      from: CY2021Q1I
+      to: CURRENT   # expands to every quarterly instant from CY2021Q1I to latest available
 
-  apple_revenue_2023:
+  # ── XBRL frames — income statement (annual) ───────────────────────────────
+  income_statement_annual:
     endpoint: xbrl_frames
     taxonomy: us-gaap
-    concept: Revenues
     unit: USD
-    period: CY2023           # duration — income statement
+    concept:
+      - Revenues
+      - NetIncomeLoss
+      - GrossProfit
+      - OperatingIncomeLoss
+      - ResearchAndDevelopmentExpense
+    period:
+      from: CY2021
+      to: CURRENT   # expands to CY2021, CY2022, ... latest complete fiscal year
+
+  # ── XBRL frames — income statement (quarterly) ────────────────────────────
+  income_statement_quarterly:
+    endpoint: xbrl_frames
+    taxonomy: us-gaap
+    unit: USD
+    concept:
+      - Revenues
+      - NetIncomeLoss
+    period:
+      from: CY2022Q1
+      to: CURRENT   # expands to CY2022Q1, CY2022Q2, ... latest complete quarter
+
+  # ── XBRL frames — cash flow (annual) ──────────────────────────────────────
+  cash_flow_annual:
+    endpoint: xbrl_frames
+    taxonomy: us-gaap
+    unit: USD
+    concept:
+      - NetCashProvidedByUsedInOperatingActivities
+    period:
+      from: CY2021
+      to: CURRENT
