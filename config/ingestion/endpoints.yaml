@@ -20,6 +20,18 @@ endpoints:
     checkpoint_subdir: "company_submissions"
     bigquery_table: "raw_company_submissions"
     write_disposition: WRITE_TRUNCATE
+    row_transform:
+      type: transpose_columnar
+      path: filings.recent
+      hoist:
+        cik: cik
+        name: company_name
+        entityType: entity_type
+        sic: sic
+        sicDescription: sic_description
+        category: category
+        fiscalYearEnd: fiscal_year_end
+        stateOfIncorporation: state_of_incorporation
 
   - name: company_facts
     description: "All XBRL financial facts reported by a company"
@@ -30,7 +42,7 @@ endpoints:
         description: "10-digit zero-padded CIK"
     checkpoint_subdir: "company_facts"
     bigquery_table: "raw_company_facts"
-    write_disposition: WRITE_TRUNCATE
+    write_disposition: WRITE_APPEND
 
   - name: company_concept
     description: "XBRL data for one financial concept for a company"
