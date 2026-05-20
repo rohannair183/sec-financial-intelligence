@@ -1,7 +1,6 @@
 """Orchestration layer and click CLI for the EDGAR ingestion pipeline."""
 
 import itertools
-import sys
 from pathlib import Path
 
 import click
@@ -22,7 +21,7 @@ class Ingestor:
         self._endpoints = {ep["name"]: ep for ep in self._cfg.get("endpoints", [])}
         self._ckpt_cfg = self._cfg.get("checkpoints", {})
 
-    def run(self, endpoint_name: str, **path_params: str) -> Path:
+    def run(self, endpoint_name: str, table: str, write_disposition: str, checkpoint_subdir: str, row_transform: str | None = None, **path_params: str) -> Path:
         """
         Fetch one endpoint, checkpoint locally, load to BigQuery, then clean up.
         Returns the checkpoint path (already deleted on success).
@@ -42,7 +41,7 @@ class Ingestor:
         base_dir = self._ckpt_cfg.get("base_dir", "checkpoints")
         ckpt_path = _checkpoint_mod.save(
             base_dir=base_dir,
-            subdir=ep["checkpoint_subdir"],
+            subdir=checkpoint_subdir,
             endpoint=endpoint_name,
             params=path_params,
             data=data,
@@ -50,11 +49,8 @@ class Ingestor:
         click.echo(f"[checkpoint] {ckpt_path}")
 
         bq = self._cfg["bigquery"]
-        table = ep["bigquery_table"]
-        disposition = ep.get("write_disposition", "WRITE_APPEND")
-        row_transform = ep.get("row_transform")
         click.echo(f"[load]       {bq['project']}.{bq['dataset']}.{table}")
-        self._loader.load(table, ckpt_path, disposition, row_transform=row_transform)
+        self._loader.load(table, ckpt_path, write_disposition, row_transform=row_transform)
 
         if self._ckpt_cfg.get("delete_on_success", True):
             _checkpoint_mod.delete(ckpt_path)
@@ -79,6 +75,9 @@ class Ingestor:
 
         cfg = dict(runs[preset_name])
         endpoint_name = cfg.pop("endpoint")
+        table = cfg.pop("bigquery_table")
+        write_disposition = cfg.pop("write_disposition", "WRITE_APPEND")
+        row_transform = cfg.pop("row_transform", None)
         cfg.pop("schedule", None)
 
         expanded = expand_params(cfg)
@@ -94,7 +93,7 @@ class Ingestor:
 
         click.echo(f"[preset]     {preset_name} — {len(combos)} combination(s)")
         for combo in combos:
-            self.run(endpoint_name, **{k: str(v) for k, v in combo.items()})
+            self.run(endpoint_name, table, write_disposition, preset_name, row_transform, **{k: str(v) for k, v in combo.items()})
 
     def endpoints(self) -> list[str]:
         """Return the names of all configured endpoints."""
@@ -117,16 +116,10 @@ def cli():
 @cli.command()
 @click.option("--preset", default=None, help="Named preset from runs.yaml (expands lists and period ranges)")
 @click.option("--all-presets", is_flag=True, default=False, help="Run every preset in runs.yaml in order")
-@click.option("--endpoint", default=None, help="Endpoint name from endpoints.yaml")
-@click.option("--cik", default=None, help="10-digit zero-padded CIK")
-@click.option("--taxonomy", default=None, help="XBRL taxonomy (e.g. us-gaap)")
-@click.option("--concept", default=None, help="XBRL concept (e.g. Assets)")
-@click.option("--unit", default=None, help="Unit of measure (e.g. USD)")
-@click.option("--period", default=None, help="Reporting period (e.g. CY2023 or CY2023Q4I)")
 @click.option("--config-dir", default="config/ingestion", show_default=True)
 @click.pass_context
-def run(ctx, preset, all_presets, endpoint, cik, taxonomy, concept, unit, period, config_dir):
-    """Fetch one endpoint (or all combinations in a preset) and load into BigQuery."""
+def run(ctx, preset, all_presets, config_dir):
+    """Run a named preset (or all presets) and load results into BigQuery."""
     ingestor = Ingestor(config_dir=config_dir)
     try:
         if all_presets:
@@ -135,22 +128,8 @@ def run(ctx, preset, all_presets, endpoint, cik, taxonomy, concept, unit, period
         elif preset:
             ingestor.run_preset(preset)
         else:
-            if not endpoint:
-                click.echo("[error] --endpoint or --preset is required", err=True)
-                ctx.exit(1)
-                return
-            path_params = {
-                k: v
-                for k, v in {
-                    "cik": cik,
-                    "taxonomy": taxonomy,
-                    "concept": concept,
-                    "unit": unit,
-                    "period": period,
-                }.items()
-                if v is not None
-            }
-            ingestor.run(endpoint, **path_params)
+            click.echo("[error] --preset or --all-presets is required", err=True)
+            ctx.exit(1)
     except (ValueError, RuntimeError, OSError) as exc:
         click.echo(f"[error] {exc}", err=True)
         ctx.exit(1)
@@ -159,7 +138,7 @@ def run(ctx, preset, all_presets, endpoint, cik, taxonomy, concept, unit, period
 @cli.command(name="list-endpoints")
 @click.option("--config-dir", default="config/ingestion", show_default=True)
 def list_endpoints(config_dir):
-    """List all configured endpoints."""
+    """List all configured endpoints and their required params."""
     cfg = load_ingestion_config(config_dir)
     for ep in cfg.get("endpoints", []):
         params = ", ".join(p["name"] for p in ep.get("path_params") or [])

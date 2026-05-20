@@ -4,39 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       run_name:
-        description: "Named preset from config/ingestion/runs.yaml — overrides all other inputs if set"
-        required: false
-        type: string
-      endpoint:
-        description: "Endpoint name — ignored if run_name is set"
-        required: false
-        default: company_tickers
-        type: choice
-        options:
-          - company_tickers
-          - company_submissions
-          - company_facts
-          - company_concept
-          - xbrl_frames
-      cik:
-        description: "10-digit zero-padded CIK (company_* endpoints)"
-        required: false
-        type: string
-      taxonomy:
-        description: "XBRL taxonomy, e.g. us-gaap"
-        required: false
-        type: string
-      concept:
-        description: "XBRL concept, e.g. Assets"
-        required: false
-        type: string
-      unit:
-        description: "Unit, e.g. USD"
-        required: false
-        type: string
-      period:
-        description: "Period — duration: CY2023 | instant (balance sheet): CY2023Q4I"
-        required: false
+        description: "Named preset from config/ingestion/runs.yaml"
+        required: true
         type: string
 
   schedule:
@@ -108,20 +77,8 @@ jobs:
                   sys.exit(result.returncode)
           EOF
 
-      # Dispatch with a named preset from runs.yaml
+      # Dispatch: run the named preset
       - name: Run ingestion (named preset)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_name != ''
+        if: github.event_name == 'workflow_dispatch'
         run: |
           uv run python -m src.ingestion.ingestor run --preset "${{ inputs.run_name }}"
-
-      # Dispatch with manual inputs (no run_name)
-      - name: Run ingestion (manual inputs)
-        if: github.event_name == 'workflow_dispatch' && inputs.run_name == ''
-        run: |
-          uv run python -m src.ingestion.ingestor run \
-            --endpoint "${{ inputs.endpoint }}" \
-            ${{ inputs.cik      && format('--cik {0}',      inputs.cik)      || '' }} \
-            ${{ inputs.taxonomy && format('--taxonomy {0}', inputs.taxonomy) || '' }} \
-            ${{ inputs.concept  && format('--concept {0}',  inputs.concept)  || '' }} \
-            ${{ inputs.unit     && format('--unit {0}',     inputs.unit)     || '' }} \
-            ${{ inputs.period   && format('--period {0}',   inputs.period)   || '' }}

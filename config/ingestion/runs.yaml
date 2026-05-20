@@ -20,11 +20,16 @@ runs:
   # ── Daily ─────────────────────────────────────────────────────────────────
   daily_tickers:
     endpoint: company_tickers
+    bigquery_table: raw_company_tickers
+    write_disposition: WRITE_TRUNCATE
+    row_transform: dict_values   # response is {index: row} — extract values as row list
     schedule: true
 
   # ── Quarterly ─────────────────────────────────────────────────────────────
   all_company_submissions:
     endpoint: company_submissions
+    bigquery_table: raw_company_submissions
+    write_disposition: WRITE_APPEND
     schedule: quarterly
     cik:
       - "0000320193"  # Apple
@@ -38,6 +43,8 @@ runs:
 
   all_company_facts:
     endpoint: company_facts
+    bigquery_table: raw_company_facts
+    write_disposition: WRITE_APPEND
     schedule: quarterly
     cik:
       - "0000320193"  # Apple
@@ -52,6 +59,8 @@ runs:
   # ── XBRL frames — balance sheet (quarterly instants) ──────────────────────
   balance_sheet_snapshots:
     endpoint: xbrl_frames
+    bigquery_table: raw_balance_sheet_snapshots
+    write_disposition: WRITE_APPEND
     taxonomy: us-gaap
     unit: USD
     concept:
@@ -66,6 +75,8 @@ runs:
   # ── XBRL frames — income statement (annual) ───────────────────────────────
   income_statement_annual:
     endpoint: xbrl_frames
+    bigquery_table: raw_income_statement_annual
+    write_disposition: WRITE_APPEND
     taxonomy: us-gaap
     unit: USD
     concept:
@@ -81,18 +92,22 @@ runs:
   # ── XBRL frames — income statement (quarterly) ────────────────────────────
   income_statement_quarterly:
     endpoint: xbrl_frames
+    bigquery_table: raw_income_statement_quarterly
+    write_disposition: WRITE_APPEND
     taxonomy: us-gaap
     unit: USD
     concept:
       - Revenues
       - NetIncomeLoss
     period:
-      from: CY2022Q5
+      from: CY2025Q1
       to: CURRENT   # expands to CY2022Q1, CY2022Q2, ... latest complete quarter
 
   # ── XBRL frames — cash flow (annual) ──────────────────────────────────────
   cash_flow_annual:
     endpoint: xbrl_frames
+    bigquery_table: raw_cash_flow_annual
+    write_disposition: WRITE_APPEND
     taxonomy: us-gaap
     unit: USD
     concept:
