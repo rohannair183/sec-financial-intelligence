@@ -75,7 +75,7 @@ runs:
       - OperatingIncomeLoss
       - ResearchAndDevelopmentExpense
     period:
-      from: CY2021
+      from: CY2025
       to: CURRENT   # expands to CY2021, CY2022, ... latest complete fiscal year
 
   # ── XBRL frames — income statement (quarterly) ────────────────────────────
@@ -87,7 +87,7 @@ runs:
       - Revenues
       - NetIncomeLoss
     period:
-      from: CY2022Q1
+      from: CY2022Q5
       to: CURRENT   # expands to CY2022Q1, CY2022Q2, ... latest complete quarter
 
   # ── XBRL frames — cash flow (annual) ──────────────────────────────────────
@@ -98,5 +98,5 @@ runs:
     concept:
       - NetCashProvidedByUsedInOperatingActivities
     period:
-      from: CY2021
+      from: CY2025
       to: CURRENT
