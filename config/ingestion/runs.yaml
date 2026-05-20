@@ -60,7 +60,7 @@ runs:
       - StockholdersEquity
       - CashAndCashEquivalentsAtCarryingValue
     period:
-      from: CY2021Q1I
+      from: CY2025Q1I
       to: CURRENT   # expands to every quarterly instant from CY2021Q1I to latest available
 
   # ── XBRL frames — income statement (annual) ───────────────────────────────
