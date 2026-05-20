@@ -1,6 +1,7 @@
 """BigQuery loader: loads a local JSON checkpoint file into a BQ table."""
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from google.cloud import bigquery
@@ -64,6 +65,30 @@ def _apply_transform(raw: object, row_transform: str | dict | None) -> list:
             for values in zip(*[node[k] for k in keys])
         ]
 
+    if transform_type == "flatten_xbrl_facts":
+        # Flatten: facts → {taxonomy} → {concept} → units → {unit} → [entries]
+        # Hoists cik and entityName from root; adds taxonomy, concept, unit, label, description per row.
+        rows = []
+        cik = raw.get("cik")
+        entity_name = raw.get("entityName")
+        for taxonomy, concepts in (raw.get("facts") or {}).items():
+            for concept, concept_data in concepts.items():
+                label = concept_data.get("label")
+                description = concept_data.get("description")
+                for unit, entries in (concept_data.get("units") or {}).items():
+                    for entry in entries:
+                        rows.append({
+                            "cik": cik,
+                            "entity_name": entity_name,
+                            "taxonomy": taxonomy,
+                            "concept": concept,
+                            "unit": unit,
+                            "label": label,
+                            "description": description,
+                            **entry,
+                        })
+        return rows
+
     raise ValueError(f"Unknown row_transform type: {transform_type!r}")
 
 
@@ -92,17 +117,26 @@ class BigQueryLoader:
         """
         table_ref = f"{self._project}.{self._dataset}.{table}"
 
+        bq_write_disposition = getattr(bigquery.WriteDisposition, write_disposition)
         job_config = bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
             autodetect=True,
-            write_disposition=getattr(bigquery.WriteDisposition, write_disposition),
-            schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION],
+            write_disposition=bq_write_disposition,
+            schema_update_options=(
+                [bigquery.SchemaUpdateOption.ALLOW_FIELD_RELAXATION]
+                if bq_write_disposition == bigquery.WriteDisposition.WRITE_APPEND
+                else []
+            ),
         )
 
         with path.open() as f:
             raw = json.load(f)
 
-        rows = _apply_transform(raw, row_transform)
+        ingested_at = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {**row, "_ingested_at": ingested_at}
+            for row in _apply_transform(raw, row_transform)
+        ]
 
         job = self._client.load_table_from_json(rows, table_ref, job_config=job_config)
         job.result()  # blocks until complete; raises google.api_core.exceptions on failure

@@ -100,6 +100,10 @@ class Ingestor:
         """Return the names of all configured endpoints."""
         return sorted(self._endpoints)
 
+    def presets(self) -> list[str]:
+        """Return the names of all configured presets in runs.yaml order."""
+        return list(self._cfg.get("runs", {}).keys())
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -112,6 +116,7 @@ def cli():
 
 @cli.command()
 @click.option("--preset", default=None, help="Named preset from runs.yaml (expands lists and period ranges)")
+@click.option("--all-presets", is_flag=True, default=False, help="Run every preset in runs.yaml in order")
 @click.option("--endpoint", default=None, help="Endpoint name from endpoints.yaml")
 @click.option("--cik", default=None, help="10-digit zero-padded CIK")
 @click.option("--taxonomy", default=None, help="XBRL taxonomy (e.g. us-gaap)")
@@ -120,11 +125,14 @@ def cli():
 @click.option("--period", default=None, help="Reporting period (e.g. CY2023 or CY2023Q4I)")
 @click.option("--config-dir", default="config/ingestion", show_default=True)
 @click.pass_context
-def run(ctx, preset, endpoint, cik, taxonomy, concept, unit, period, config_dir):
+def run(ctx, preset, all_presets, endpoint, cik, taxonomy, concept, unit, period, config_dir):
     """Fetch one endpoint (or all combinations in a preset) and load into BigQuery."""
     ingestor = Ingestor(config_dir=config_dir)
     try:
-        if preset:
+        if all_presets:
+            for name in ingestor.presets():
+                ingestor.run_preset(name)
+        elif preset:
             ingestor.run_preset(preset)
         else:
             if not endpoint:

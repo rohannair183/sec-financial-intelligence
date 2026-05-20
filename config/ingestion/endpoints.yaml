@@ -19,7 +19,7 @@ endpoints:
         description: "10-digit zero-padded CIK (e.g. 0000320193)"
     checkpoint_subdir: "company_submissions"
     bigquery_table: "raw_company_submissions"
-    write_disposition: WRITE_TRUNCATE
+    write_disposition: WRITE_APPEND
     row_transform:
       type: transpose_columnar
       path: filings.recent
@@ -43,6 +43,8 @@ endpoints:
     checkpoint_subdir: "company_facts"
     bigquery_table: "raw_company_facts"
     write_disposition: WRITE_APPEND
+    row_transform:
+      type: flatten_xbrl_facts
 
   - name: company_concept
     description: "XBRL data for one financial concept for a company"
