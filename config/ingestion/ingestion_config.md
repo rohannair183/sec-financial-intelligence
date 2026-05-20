@@ -10,6 +10,7 @@ The ingestion layer is fully config-driven. Adding a new EDGAR endpoint means ad
 | `bigquery.yaml` | GCP project, dataset, location, credentials file path |
 | `checkpoints.yaml` | Local checkpoint directory and cleanup behaviour |
 | `endpoints.yaml` | One entry per EDGAR endpoint to ingest |
+| `runs.yaml` | Named presets for GitHub Actions dispatch and scheduled runs |
 
 All four files are deep-merged into a single config dict at runtime. Any `${VAR}` token is substituted from the environment (`.env`). Dotted tokens like `${edgar.base_url}` are resolved from sibling config keys in the merged dict.
 
@@ -92,6 +93,54 @@ EDGAR API responses are not always a flat list of rows. Use `row_transform` to t
 | `dict_values` | Response is a dict keyed by a numeric index | `{"0": {...}, "1": {...}}` |
 
 If you encounter a `Too many fields` error from BigQuery, the response is likely an indexed dict — add `row_transform: dict_values`.
+
+---
+
+## `runs.yaml`
+
+Named presets for triggering ingestion from GitHub Actions. Each preset maps a name to a full set of CLI params. The workflow reads this file at runtime — adding a preset here is all you need to do to expose it in CI.
+
+```yaml
+runs:
+  <preset_name>:
+    endpoint: string          # must match a name in endpoints.yaml
+    schedule: true/false      # optional — include in the daily cron run
+    cik: string               # optional path params — include only what the endpoint needs
+    taxonomy: string
+    concept: string
+    unit: string
+    period: string
+```
+
+### Period format for `xbrl_frames`
+
+The EDGAR API distinguishes between two period types:
+
+| Concept type | Example concepts | Period format | Example |
+|---|---|---|---|
+| Instant (balance sheet) | `Assets`, `Liabilities`, `StockholdersEquity` | `CY{year}Q{n}I` | `CY2023Q4I` |
+| Duration (income statement) | `Revenues`, `NetIncomeLoss`, `OperatingExpenses` | `CY{year}` or `CY{year}Q{n}` | `CY2023`, `CY2023Q1` |
+
+Using a duration period for an instant concept (or vice versa) returns a 404.
+
+### Using presets from the GitHub Actions UI
+
+In **Actions → SEC EDGAR Ingestion → Run workflow**, enter the preset name in the `run_name` field. The workflow reads the YAML and builds the CLI args — no manual param entry needed.
+
+### Adding a scheduled preset
+
+Set `schedule: true` on any preset and it will be included in the daily 06:00 UTC cron run automatically. No changes to the workflow file are needed.
+
+```yaml
+runs:
+  daily_assets_q4:
+    endpoint: xbrl_frames
+    taxonomy: us-gaap
+    concept: Assets
+    unit: USD
+    period: CY2023Q4I
+    schedule: true
+```
 
 ---
 

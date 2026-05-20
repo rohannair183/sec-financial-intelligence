@@ -1,0 +1,32 @@
+# Named ingestion presets.
+# Use run_name in the GitHub Actions workflow_dispatch input to pick one,
+# or reference these when running locally with --preset (if added to the CLI).
+#
+# schedule: true  → included in the daily cron run
+#
+# xbrl_frames period formats:
+#   CY2023        duration (full year) — for income statement concepts
+#   CY2023Q4I     instant (point in time) — for balance sheet concepts
+
+runs:
+  daily_tickers:
+    endpoint: company_tickers
+    schedule: true
+
+  apple_facts:
+    endpoint: company_facts
+    cik: "0000320193"
+
+  apple_assets_q4_2023:
+    endpoint: xbrl_frames
+    taxonomy: us-gaap
+    concept: Assets
+    unit: USD
+    period: CY2023Q4I        # instant — balance sheet
+
+  apple_revenue_2023:
+    endpoint: xbrl_frames
+    taxonomy: us-gaap
+    concept: Revenues
+    unit: USD
+    period: CY2023           # duration — income statement

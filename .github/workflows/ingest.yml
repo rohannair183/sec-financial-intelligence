@@ -3,9 +3,13 @@ name: SEC EDGAR Ingestion
 on:
   workflow_dispatch:
     inputs:
+      run_name:
+        description: "Named preset from config/ingestion/runs.yaml — overrides all other inputs if set"
+        required: false
+        type: string
       endpoint:
-        description: "Endpoint name (see config/ingestion/endpoints.yaml)"
-        required: true
+        description: "Endpoint name — ignored if run_name is set"
+        required: false
         default: company_tickers
         type: choice
         options:
@@ -15,28 +19,28 @@ on:
           - company_concept
           - xbrl_frames
       cik:
-        description: "10-digit zero-padded CIK (required for company_* endpoints)"
+        description: "10-digit zero-padded CIK (company_* endpoints)"
         required: false
         type: string
       taxonomy:
-        description: "XBRL taxonomy, e.g. us-gaap (required for company_concept, xbrl_frames)"
+        description: "XBRL taxonomy, e.g. us-gaap"
         required: false
         type: string
       concept:
-        description: "XBRL concept, e.g. Assets (required for company_concept, xbrl_frames)"
+        description: "XBRL concept, e.g. Assets"
         required: false
         type: string
       unit:
-        description: "Unit, e.g. USD (required for xbrl_frames)"
+        description: "Unit, e.g. USD"
         required: false
         type: string
       period:
-        description: "Period, e.g. CY2023 (required for xbrl_frames)"
+        description: "Period — duration: CY2023 | instant (balance sheet): CY2023Q4I"
         required: false
         type: string
 
   schedule:
-    # Refresh all company tickers daily at 06:00 UTC (after SEC nightly update)
+    # Run all presets with schedule: true in config/ingestion/runs.yaml (06:00 UTC)
     - cron: "0 6 * * *"
 
 jobs:
@@ -46,9 +50,9 @@ jobs:
     env:
       GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
       BQ_DATASET: ${{ secrets.BQ_DATASET }}
-      BQ_LOCATION: ${{ secrets.BQ_LOCATION }}
+      # BQ_LOCATION is not a secret — hardcoded to avoid masking "US" inside "USD" in logs
+      BQ_LOCATION: US
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
-      # Points to the temp file written in the "Write SA key" step below
       DBT_KEYFILE: /tmp/sa_key.json
 
     steps:
@@ -62,17 +66,56 @@ jobs:
         run: uv sync
 
       # GCP_SA_KEY holds the full JSON content of the service account key.
-      # There is no persistent filesystem in CI, so we write it to a temp file
-      # and point DBT_KEYFILE there. The file is never uploaded as an artifact.
+      # Written to a temp file here; DBT_KEYFILE points to it above.
       - name: Write GCP service account key
         run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/sa_key.json
 
-      - name: Run ingestion (scheduled — company_tickers)
+      # Schedule: run all presets with schedule: true from runs.yaml
+      - name: Run ingestion (scheduled presets)
         if: github.event_name == 'schedule'
-        run: uv run python -m src.ingestion.ingestor run --endpoint company_tickers
+        run: |
+          uv run python - <<'EOF'
+          import yaml, subprocess, sys
+          runs = yaml.safe_load(open("config/ingestion/runs.yaml"))["runs"]
+          for name, cfg in runs.items():
+              if not cfg.get("schedule"):
+                  continue
+              args = ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run",
+                      "--endpoint", cfg["endpoint"]]
+              for k in ["cik", "taxonomy", "concept", "unit", "period"]:
+                  if k in cfg:
+                      args += [f"--{k}", str(cfg[k])]
+              print(f"Running preset: {name}", flush=True)
+              result = subprocess.run(args)
+              if result.returncode != 0:
+                  sys.exit(result.returncode)
+          EOF
 
-      - name: Run ingestion (manual dispatch)
-        if: github.event_name == 'workflow_dispatch'
+      # Dispatch with a named preset from runs.yaml
+      - name: Run ingestion (named preset)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_name != ''
+        env:
+          RUN_NAME: ${{ inputs.run_name }}
+        run: |
+          uv run python - <<'EOF'
+          import yaml, subprocess, sys, os
+          runs = yaml.safe_load(open("config/ingestion/runs.yaml"))["runs"]
+          name = os.environ["RUN_NAME"]
+          if name not in runs:
+              print(f"Unknown preset '{name}'. Available: {', '.join(runs)}", file=sys.stderr)
+              sys.exit(1)
+          cfg = runs[name]
+          args = ["uv", "run", "python", "-m", "src.ingestion.ingestor", "run",
+                  "--endpoint", cfg["endpoint"]]
+          for k in ["cik", "taxonomy", "concept", "unit", "period"]:
+              if k in cfg:
+                  args += [f"--{k}", str(cfg[k])]
+          sys.exit(subprocess.run(args).returncode)
+          EOF
+
+      # Dispatch with manual inputs (no run_name)
+      - name: Run ingestion (manual inputs)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_name == ''
         run: |
           uv run python -m src.ingestion.ingestor run \
             --endpoint "${{ inputs.endpoint }}" \

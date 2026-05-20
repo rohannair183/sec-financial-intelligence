@@ -16,6 +16,7 @@ config/ingestion/
   bigquery.yaml     # GCP project, dataset, location, credentials file
   checkpoints.yaml  # Local checkpoint directory + delete_on_success flag
   endpoints.yaml    # One entry per EDGAR endpoint
+  runs.yaml         # Named presets for GitHub Actions and recurring schedules
 ```
 
 All `${VAR}` tokens in the YAML files are resolved from `.env` at runtime. Cross-references like `${edgar.base_url}` are resolved from sibling config keys.
@@ -61,12 +62,13 @@ python -m src.ingestion.ingestor run --endpoint company_tickers
 python -m src.ingestion.ingestor run --endpoint company_facts --cik 0000320193
 
 # ingest a specific concept across all companies for a period
+# balance sheet (instant) concepts use CY2023Q4I; income statement (duration) use CY2023
 python -m src.ingestion.ingestor run \
   --endpoint xbrl_frames \
   --taxonomy us-gaap \
   --concept Assets \
   --unit USD \
-  --period CY2023
+  --period CY2023Q4I
 ```
 
 ### Setup
@@ -83,11 +85,15 @@ cp .env.example .env   # set DBT_KEYFILE, GCP_PROJECT, BQ_DATASET, EDGAR_USER_AG
 
 ## GitHub Actions
 
-The workflow at `.github/workflows/ingest.yml` can run any ingestion endpoint from the GitHub UI or on a schedule.
+The workflow at `.github/workflows/ingest.yml` can run any ingestion endpoint from the GitHub UI or on a schedule. Presets and scheduled runs are declared in `config/ingestion/runs.yaml` — no workflow edits needed to add new recurring jobs.
 
 ### Triggering a run
 
-Go to **Actions → SEC EDGAR Ingestion → Run workflow**. Pick an endpoint and fill in only the parameters that endpoint requires:
+Go to **Actions → SEC EDGAR Ingestion → Run workflow**. You have two options:
+
+**Option 1 — named preset** (recommended): enter a preset name from `config/ingestion/runs.yaml` in the `run_name` field. All params are read from the YAML automatically.
+
+**Option 2 — manual inputs**: leave `run_name` empty, pick an endpoint from the dropdown, and fill in the params that endpoint requires:
 
 | Endpoint | Required inputs |
 |---|---|
@@ -97,7 +103,9 @@ Go to **Actions → SEC EDGAR Ingestion → Run workflow**. Pick an endpoint and
 | `company_concept` | `cik`, `taxonomy`, `concept` |
 | `xbrl_frames` | `taxonomy`, `concept`, `unit`, `period` |
 
-The workflow also runs on a daily schedule (06:00 UTC) for `company_tickers`.
+### Scheduled runs
+
+The workflow triggers daily at 06:00 UTC and runs every preset in `runs.yaml` that has `schedule: true`. To add a new recurring job, append a preset with `schedule: true` to `runs.yaml` — no changes to the workflow file needed.
 
 ### Secrets to configure
 
@@ -108,8 +116,9 @@ Add these under **Settings → Secrets and variables → Actions → New reposit
 | `GCP_SA_KEY` | The **full JSON content** of your GCP service account key file |
 | `GCP_PROJECT` | Your GCP project ID (e.g. `sec-edgar-intelligence`) |
 | `BQ_DATASET` | BigQuery dataset (e.g. `raw`) |
-| `BQ_LOCATION` | BigQuery location (e.g. `US`) |
 | `EDGAR_USER_AGENT` | Your SEC user-agent string (e.g. `Your Name your@email.com`) |
+
+> **Note:** `BQ_LOCATION` is intentionally not stored as a secret. GitHub Actions masks every occurrence of a secret's value in log output — storing `US` as a secret causes `USD` to appear as `***D` in logs. The location is hardcoded to `US` directly in the workflow.
 
 ### Local vs CI: how secrets differ
 
