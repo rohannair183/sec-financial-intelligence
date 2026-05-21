@@ -4,6 +4,7 @@ import itertools
 from pathlib import Path
 
 import click
+import requests
 
 from src.utils.config import load_ingestion_config
 from src.utils.periods import expand_params
@@ -93,7 +94,13 @@ class Ingestor:
 
         click.echo(f"[preset]     {preset_name} — {len(combos)} combination(s)")
         for combo in combos:
-            self.run(endpoint_name, table, write_disposition, preset_name, row_transform, **{k: str(v) for k, v in combo.items()})
+            try:
+                self.run(endpoint_name, table, write_disposition, preset_name, row_transform, **{k: str(v) for k, v in combo.items()})
+            except requests.HTTPError as exc:
+                if exc.response is not None and exc.response.status_code == 404:
+                    click.echo(f"[skip]       404 — frame not found for {combo}, skipping")
+                else:
+                    raise
 
     def endpoints(self) -> list[str]:
         """Return the names of all configured endpoints."""

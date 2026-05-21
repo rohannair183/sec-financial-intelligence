@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: raw
+    database: sec-edgar-intelligence
+    schema: raw
+    tables:
+      - name: raw_company_tickers
+        description: "Daily snapshot of all SEC-registered company tickers and CIKs"
+      - name: raw_company_submissions
+        description: "Quarterly fetch of filing metadata for tracked companies"
+      - name: raw_company_facts
+        description: "Quarterly fetch of all XBRL facts for tracked companies (full history)"
+      - name: raw_balance_sheet_snapshots
+        description: "Cross-company quarterly instant values for balance sheet concepts"
+      - name: raw_income_statement_annual
+        description: "Cross-company annual income statement values"
+      - name: raw_income_statement_quarterly
+        description: "Cross-company quarterly income statement values"
+      - name: raw_cash_flow_annual
+        description: "Cross-company annual cash flow statement values"
+      - name: raw_cash_flow_quarterly
+        description: "Cross-company quarterly cash flow values"
+      - name: raw_shares_and_eps_annual
+        description: "Cross-company annual EPS values (USD-per-shares)"
+      - name: raw_shares_outstanding
+        description: "Cross-company quarterly instant share count values"

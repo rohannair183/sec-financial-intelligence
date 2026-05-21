@@ -176,15 +176,3 @@ runs:
       from: CY2025Q1I
       to: CURRENT
 
-  # ── XBRL frames — entity public float (DEI taxonomy) ─────────────────────
-  entity_public_float:
-    endpoint: xbrl_frames
-    bigquery_table: raw_entity_public_float
-    write_disposition: WRITE_APPEND
-    taxonomy: dei
-    unit: USD
-    concept:
-      - EntityPublicFloat
-    period:
-      from: CY2025
-      to: CURRENT
