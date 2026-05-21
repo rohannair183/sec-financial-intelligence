@@ -68,9 +68,14 @@ runs:
       - Liabilities
       - StockholdersEquity
       - CashAndCashEquivalentsAtCarryingValue
+      - LongTermDebt
+      - RetainedEarningsAccumulatedDeficit
+      - AccountsReceivableNetCurrent
+      - InventoryNet
+      - Goodwill
     period:
       from: CY2025Q1I
-      to: CURRENT   # expands to every quarterly instant from CY2021Q1I to latest available
+      to: CURRENT   # expands to every quarterly instant from CY2025Q1I to latest available
 
   # ── XBRL frames — income statement (annual) ───────────────────────────────
   income_statement_annual:
@@ -81,13 +86,18 @@ runs:
     unit: USD
     concept:
       - Revenues
-      - NetIncomeLoss
+      - CostOfRevenue
       - GrossProfit
       - OperatingIncomeLoss
       - ResearchAndDevelopmentExpense
+      - SellingGeneralAndAdministrativeExpense
+      - DepreciationDepletionAndAmortization
+      - InterestExpense
+      - IncomeTaxExpenseBenefit
+      - NetIncomeLoss
     period:
       from: CY2025
-      to: CURRENT   # expands to CY2021, CY2022, ... latest complete fiscal year
+      to: CURRENT   # expands to CY2025, CY2024, ... latest complete fiscal year
 
   # ── XBRL frames — income statement (quarterly) ────────────────────────────
   income_statement_quarterly:
@@ -98,10 +108,12 @@ runs:
     unit: USD
     concept:
       - Revenues
+      - GrossProfit
+      - OperatingIncomeLoss
       - NetIncomeLoss
     period:
       from: CY2025Q1
-      to: CURRENT   # expands to CY2022Q1, CY2022Q2, ... latest complete quarter
+      to: CURRENT   # expands to CY2025Q1, CY2025Q2, ... latest complete quarter
 
   # ── XBRL frames — cash flow (annual) ──────────────────────────────────────
   cash_flow_annual:
@@ -112,6 +124,67 @@ runs:
     unit: USD
     concept:
       - NetCashProvidedByUsedInOperatingActivities
+      - NetCashProvidedByUsedInInvestingActivities
+      - NetCashProvidedByUsedInFinancingActivities
+      - PaymentsToAcquirePropertyPlantAndEquipment
+      - PaymentsForRepurchaseOfCommonStock
+      - PaymentsOfDividends
+      - DepreciationDepletionAndAmortization
+    period:
+      from: CY2025
+      to: CURRENT
+
+  # ── XBRL frames — cash flow (quarterly) ───────────────────────────────────
+  cash_flow_quarterly:
+    endpoint: xbrl_frames
+    bigquery_table: raw_cash_flow_quarterly
+    write_disposition: WRITE_APPEND
+    taxonomy: us-gaap
+    unit: USD
+    concept:
+      - NetCashProvidedByUsedInOperatingActivities
+      - PaymentsToAcquirePropertyPlantAndEquipment
+    period:
+      from: CY2025Q1
+      to: CURRENT
+
+  # ── XBRL frames — EPS (annual, USD-per-shares unit) ───────────────────────
+  shares_and_eps_annual:
+    endpoint: xbrl_frames
+    bigquery_table: raw_shares_and_eps_annual
+    write_disposition: WRITE_APPEND
+    taxonomy: us-gaap
+    unit: USD-per-shares
+    concept:
+      - EarningsPerShareBasic
+      - EarningsPerShareDiluted
+    period:
+      from: CY2025
+      to: CURRENT
+
+  # ── XBRL frames — share counts (shares unit) ──────────────────────────────
+  shares_outstanding:
+    endpoint: xbrl_frames
+    bigquery_table: raw_shares_outstanding
+    write_disposition: WRITE_APPEND
+    taxonomy: us-gaap
+    unit: shares
+    concept:
+      - CommonStockSharesOutstanding
+      - WeightedAverageNumberOfSharesOutstandingBasic
+    period:
+      from: CY2025Q1I
+      to: CURRENT
+
+  # ── XBRL frames — entity public float (DEI taxonomy) ─────────────────────
+  entity_public_float:
+    endpoint: xbrl_frames
+    bigquery_table: raw_entity_public_float
+    write_disposition: WRITE_APPEND
+    taxonomy: dei
+    unit: USD
+    concept:
+      - EntityPublicFloat
     period:
       from: CY2025
       to: CURRENT
